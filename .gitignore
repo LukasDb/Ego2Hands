@@ -1,0 +1,5 @@
+**/__pycace/**
+**/data/**
+**/outputs/**
+**/models_saved/**
+*.pyc

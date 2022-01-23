@@ -3,10 +3,12 @@ import numpy as np
 from easydict import EasyDict as edict
 import yaml
 import random
-import torch.nn as nn
-import torch
+#import torch
+#import torch.nn as nn
 
-class AverageMeter(object):
+
+
+class AverageMeter:
     """ Computes ans stores the average and current value"""
     def __init__(self):
         self.reset()
@@ -34,7 +36,7 @@ def save_model(state, is_best, is_last, filename):
 
 def Config(filename):
     with open(filename, 'r') as f:
-        parser = edict(yaml.load(f))
+        parser = edict(yaml.full_load(f))
     for x in parser:
         print('{}: {}'.format(x, parser[x]))
     return parser
@@ -148,7 +150,7 @@ def seg_augmentation_wo_kpts(img, seg, energy):
     coords1 = np.where(fg_mask)
     img_top, img_bot = np.min(coords1[0]), np.max(coords1[0])
     
-    shift_range_ratio = 0.2
+    shift_range_ratio = 0.0
     # down shift
     down_shift = True if not fg_mask[0, :].any() else False
     if down_shift:

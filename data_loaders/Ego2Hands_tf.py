@@ -1,12 +1,11 @@
 import os
 import numpy as np
-import torch
-import torch.utils.data as data
 import cv2
 import random
 import math
 from utils import *
 import sys
+import tensorflow as tf
 
 def random_bg_augment(img, img_path = "", bg_adapt = False, brightness_aug = True, flip_aug = True):
     if brightness_aug:
@@ -121,16 +120,10 @@ def read_ego2hands_files(ego2hands_root_dir):
 
     return img_path_list, energy_path_list
     
-def read_bg_data(args, config, bg_adapt, seq_i):
-    if not args.custom:
-        if not bg_adapt:
-            root_bg_dir = config.bg_all_dir
-        else:
-            root_bg_dir = os.path.join(config.dataset_eval_dir, "eval_seq{}_bg".format(seq_i))
-    else:
-        assert config.custom_bg_dir != "", "Error: custom bg dir not set. Please set \"custom_bg_dir\" in the config file."
-        root_bg_dir = config.custom_bg_dir
-        
+def read_bg_data(config):
+    
+    root_bg_dir = config.bg_all_dir
+
     # backgrounds
     bg_path_list = []
     for root, dirs, files in os.walk(root_bg_dir):
@@ -139,12 +132,9 @@ def read_bg_data(args, config, bg_adapt, seq_i):
                 bg_path_list.append(os.path.join(root, file_name))
     return bg_path_list
 
-def read_test_sequences(args, config, seq_i):
-    if not args.custom:
-        test_seq_dir = os.path.join(config.dataset_eval_dir, "eval_seq{}_imgs".format(seq_i))
-    else:
-        assert config.custom_eval_dir != "", "Error: custom eval dir not set. Please set \"custom_eval_dir\" in the config file."
-        test_seq_dir = config.custom_eval_dir
+def read_test_sequences(config, seq_i):
+
+    test_seq_dir = os.path.join(config.dataset_eval_dir, "eval_seq{}_imgs".format(seq_i))
     
     img_path_list = []
     seg_gt_path_list = []
@@ -154,7 +144,7 @@ def read_test_sequences(args, config, seq_i):
     for root, dirs, files in os.walk(test_seq_dir):
         for file_name in files:
             if file_name.endswith(".png") and not "e" in file_name:
-                if not args.custom and os.path.exists(os.path.join(root, file_name.replace(".png", "_seg.png"))):
+                if os.path.exists(os.path.join(root, file_name.replace(".png", "_seg.png"))):
                     img_path_list.append(os.path.join(root, file_name))
                     seg_gt_path_list.append(os.path.join(root, file_name.replace(".png", "_seg.png")))
                     energy_l_path_list.append(os.path.join(root, file_name.replace(".png", "_e_l.png")))
@@ -167,7 +157,7 @@ def read_test_sequences(args, config, seq_i):
                 
     return img_path_list, seg_gt_path_list, energy_l_path_list, energy_r_path_list
 
-def get_random_brightness_for_scene(args, config, bg_adapt, seq_i):
+def get_random_brightness_for_scene(bg_adapt, seq_i):
     dark_lighting_set = [5]
     normal_lighting_set = [1, 3, 4, 6, 7]
     bright_lighting_set = [2, 8]
@@ -175,35 +165,35 @@ def get_random_brightness_for_scene(args, config, bg_adapt, seq_i):
     if not bg_adapt:
         return random.randint(15, 240)
     else:
-        if not args.custom:
-            if seq_i in dark_lighting_set:
-                return random.randint(*brightness_map["dark"])
-            elif seq_i in normal_lighting_set:
-                return random.randint(*brightness_map["normal"])
-            elif seq_i in bright_lighting_set:
-                return random.randint(*brightness_map["bright"])
-        else:
-            assert config.custom_scene_brightness != "", "Error: custom scene brightness not set. Please set \"custom_scene_brightness\" in the config file."
-            assert config.custom_scene_brightness in brightness_map, "Error: unrecognized brightness {} (valid options [\"dark\", \"normal\", \"bright\"]".format(config.custom_scene_brightness)
-            return random.randint(*brightness_map[config.custom_scene_brightness])
+        if seq_i in dark_lighting_set:
+            return random.randint(*brightness_map["dark"])
+        elif seq_i in normal_lighting_set:
+            return random.randint(*brightness_map["normal"])
+        elif seq_i in bright_lighting_set:
+            return random.randint(*brightness_map["bright"])
+
 
 LEFT_IDX = 1
 RIGHT_IDX = 2
 
-class Ego2HandsData(data.Dataset):
+class Ego2HandsData():
     
-    def __init__(self, args, config, mode, seq_i = -1):
-        self.args = args
+    def __init__(self, config, mode, seq_i = -1):
+        self.index = -1
+        #self.args = args
         self.config = config
         self.mode = mode
-        self.bg_adapt = args.adapt
+        self.bg_adapt = False
         self.seq_i = seq_i
-        self.input_edge = args.input_edge
-        self.bg_list = read_bg_data(self.args, self.config, self.bg_adapt, seq_i)
+        self.input_edge = False
+        self.bg_list = read_bg_data(self.config)
         if self.mode == "train_seg":
             self.img_path_list, self.energy_path_list = read_ego2hands_files(self.config.dataset_train_dir)
         elif self.mode == "test_seg":
-            self.img_path_list, self.seg_gt_path_list, self.energy_l_gt_path_list, self.energy_r_gt_path_list = read_test_sequences(self.args, self.config, seq_i)
+            if seq_i == -1:
+                print("Need to specify sequence for testing!")
+                sys.exit()
+            self.img_path_list, self.seg_gt_path_list, self.energy_l_gt_path_list, self.energy_r_gt_path_list = read_test_sequences(self.config, seq_i)
             self.bg_list = []
         else:
             print("Unknown mode: {}".format(mode))
@@ -216,6 +206,10 @@ class Ego2HandsData(data.Dataset):
         print("Loading finished")
         print("#hand imgs: {}".format(len(self.img_path_list)))
         print("#bg imgs: {}".format(len(self.bg_list)))
+    
+    def __next__(self):
+        self.index += 1
+        return self.__getitem__(self.index)
 
     def __getitem__(self, index):
         if self.mode == "train_seg":
@@ -234,7 +228,7 @@ class Ego2HandsData(data.Dataset):
             # Augmentation with random translation
             left_img, left_seg, left_energy = seg_augmentation_wo_kpts(left_img, left_seg, left_energy)
             # Augmentation
-            brightness_val = get_random_brightness_for_scene(self.args, self.config, self.bg_adapt, self.seq_i)
+            brightness_val = get_random_brightness_for_scene(self.bg_adapt, self.seq_i)
             left_img = change_mean_brightness(left_img, left_seg, brightness_val, 20, self.img_path_list[left_i])
             left_img = random_smoothness(left_img)
 
@@ -312,13 +306,16 @@ class Ego2HandsData(data.Dataset):
                 seg_real = np.zeros((img_real.shape[:2]), dtype=np.uint8)
                 seg_real[left_seg] = LEFT_IDX
                 right_energy.fill(0.0)
-            
+
+
             # For multi-resoluiton
             seg_real2 = cv2.resize(seg_real, (self.img_w//2, self.img_h//2), interpolation=cv2.INTER_NEAREST)
             seg_real4 = cv2.resize(seg_real, (self.img_w//4, self.img_h//4), interpolation=cv2.INTER_NEAREST)
             
             left_energy2 = cv2.resize(left_energy, (self.img_w//2, self.img_h//2))
             left_energy4 = cv2.resize(left_energy2, (self.img_w//4, self.img_h//4))
+
+
             
             right_energy2 = cv2.resize(right_energy, (self.img_w//2, self.img_h//2))
             right_energy4 = cv2.resize(right_energy2, (self.img_w//4, self.img_h//4))
@@ -327,11 +324,11 @@ class Ego2HandsData(data.Dataset):
             bg_energy2 = 1.0 - np.maximum(left_energy2, right_energy2)
             bg_energy4 = 1.0 - np.maximum(left_energy4, right_energy4)
             
-            energy_gt = np.stack([bg_energy, left_energy, right_energy], 0)
-            energy_gt2 = np.stack([bg_energy2, left_energy2, right_energy2], 0)
-            energy_gt4 = np.stack([bg_energy4, left_energy4, right_energy4], 0)
+            energy_gt = np.stack([bg_energy, left_energy, right_energy], 2)
+            energy_gt2 = np.stack([bg_energy2, left_energy2, right_energy2], 2)
+            energy_gt4 = np.stack([bg_energy4, left_energy4, right_energy4], 2)
 
-            img_real_orig_tensor = torch.from_numpy(img_real_orig)
+            img_real_orig_tensor = tf.convert_to_tensor(img_real_orig)
             img_real = cv2.cvtColor(img_real, cv2.COLOR_RGB2GRAY)
             
             # For input edge map
@@ -342,16 +339,17 @@ class Ego2HandsData(data.Dataset):
                 img_real = np.expand_dims(img_real, -1)
                 
             # Prepare tensors
-            img_id = torch.from_numpy(np.array([0]))
-            img_real_tensor = normalize_tensor(torch.from_numpy(img_real.transpose(2, 0, 1)), 128.0, 256.0)
-            seg_real_tensor = torch.from_numpy(seg_real).long()
-            seg_real2_tensor = torch.from_numpy(seg_real2).long()
-            seg_real4_tensor = torch.from_numpy(seg_real4).long()
-            energy_gt_tensor = torch.from_numpy(energy_gt)
-            energy_gt2_tensor = torch.from_numpy(energy_gt2)
-            energy_gt4_tensor = torch.from_numpy(energy_gt4)
+            img_id = tf.convert_to_tensor(np.array([0]))
+            img_real_tensor = (tf.convert_to_tensor(img_real) - 128.0) / 256.0
+            seg_real_tensor = tf.convert_to_tensor(seg_real)
+            seg_real2_tensor = tf.convert_to_tensor(seg_real2)
+            seg_real4_tensor = tf.convert_to_tensor(seg_real4)
+            energy_gt_tensor = tf.convert_to_tensor(energy_gt)
+            energy_gt2_tensor = tf.convert_to_tensor(energy_gt2)
+            energy_gt4_tensor = tf.convert_to_tensor(energy_gt4)
 
             return img_id, img_real_orig_tensor, img_real_tensor, seg_real_tensor, seg_real2_tensor, seg_real4_tensor, energy_gt_tensor, energy_gt2_tensor, energy_gt4_tensor
+            
         elif self.mode == "test_seg":
             # Prepare image
             img_real_test = cv2.imread(self.img_path_list[index]).astype(np.float32)
@@ -366,28 +364,21 @@ class Ego2HandsData(data.Dataset):
             else:
                 img_real_test = np.expand_dims(img_real_test, -1)
             
-            if not self.args.custom:
-                # Prepare segmentation gt
-                seg_gt_test = (cv2.imread(self.seg_gt_path_list[index], 0)/50).astype(np.uint8)
-                seg_gt_test = cv2.resize(seg_gt_test, (self.img_w, self.img_h), interpolation=cv2.INTER_NEAREST)
+            # Prepare segmentation gt
+            seg_gt_test = (cv2.imread(self.seg_gt_path_list[index], 0)/50).astype(np.uint8)
+            seg_gt_test = cv2.resize(seg_gt_test, (self.img_w, self.img_h), interpolation=cv2.INTER_NEAREST)
 
-                # Prepare bounding box gt
-                energy_l_gt = cv2.resize(cv2.imread(self.energy_l_gt_path_list[index]), (self.img_w, self.img_h)).astype(np.float32)/255.0
-                box_l_np = get_bounding_box_from_energy(energy_l_gt, close_op = False)
-                energy_r_gt = cv2.resize(cv2.imread(self.energy_r_gt_path_list[index]), (self.img_w, self.img_h)).astype(np.float32)/255.0
-                box_r_np = get_bounding_box_from_energy(energy_r_gt, close_op = False)
-            else:
-                seg_gt_test = self.EMPTY_IMG_ARRAY
-                energy_l_gt = self.EMPTY_IMG_ARRAY
-                box_l_np = self.EMPTY_BOX_ARRAY
-                energy_r_gt = self.EMPTY_IMG_ARRAY
-                box_r_np = self.EMPTY_BOX_ARRAY
+            # Prepare bounding box gt
+            energy_l_gt = cv2.resize(cv2.imread(self.energy_l_gt_path_list[index]), (self.img_w, self.img_h)).astype(np.float32)/255.0
+            box_l_np = get_bounding_box_from_energy(energy_l_gt, close_op = False)
+            energy_r_gt = cv2.resize(cv2.imread(self.energy_r_gt_path_list[index]), (self.img_w, self.img_h)).astype(np.float32)/255.0
+            box_r_np = get_bounding_box_from_energy(energy_r_gt, close_op = False)
 
-            img_real_orig_tensor = torch.from_numpy(img_real_orig)
-            img_real_test_tensor = normalize_tensor(torch.from_numpy(img_real_test.transpose(2, 0, 1)), 128.0, 256.0)
-            seg_gt_tensor = torch.from_numpy(seg_gt_test).long()
-            box_l_tensor = torch.from_numpy(box_l_np)
-            box_r_tensor = torch.from_numpy(box_r_np)
+            img_real_orig_tensor = tf.convert_to_tensor(img_real_orig)
+            img_real_test_tensor = normalize_tensor(tf.convert_to_tensor(img_real_test), 128.0, 256.0)
+            seg_gt_tensor = tf.convert_to_tensor(seg_gt_test)
+            box_l_tensor = tf.convert_to_tensor(box_l_np)
+            box_r_tensor = tf.convert_to_tensor(box_r_np)
             
             return img_real_orig_tensor, img_real_test_tensor, seg_gt_tensor, box_l_tensor, box_r_tensor
 

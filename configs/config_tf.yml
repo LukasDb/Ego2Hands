@@ -11,10 +11,10 @@ custom_scene_brightness: "normal" #[dark, normal, bright]
 workers: 4
 batch_size: 4
 num_seqs: 4
-max_iter_seg: 500
+max_iter_seg: 50
 max_iter_seg_adapt: 50
 display_interval: 10
-save_interval: 100
+save_interval: 10
 num_classes : 3
 weight_decay: 0.001
 

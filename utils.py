@@ -28,12 +28,12 @@ class AverageMeter:
         
 def save_model(model: tf.keras.Model, is_best, is_last, filename):
     if is_last:
-        model.save(filename + '_pretrained.pth.tar')
+        model.save(filename + '_pretrained')
     else:
         if is_best:
-            model.save(filename + '_best.pth.tar')
+            model.save(filename + '_best')
         else:
-            model.save(filename + '_latest.pth.tar')
+            model.save(filename + '_latest')
 
 def Config(filename):
     with open(filename, 'r') as f:
@@ -48,9 +48,9 @@ def normalize_tensor(tensor, mean, std):
     return tensor
 
 def compute_iou(pred, target, box_l = None, box_r = None, is_idx = False):
-    n_classes = len(np.unique(target.cpu().data.numpy()))
+    n_classes = len(np.unique(target.numpy()))
     if n_classes == 1:
-         pred_unique_np = np.unique(pred.cpu().data.numpy())
+         pred_unique_np = np.unique(pred.numpy())
          if len(pred_unique_np) == 1 and pred_unique_np[0] == 0:
              return np.array([1.0])
          else:
@@ -76,16 +76,19 @@ def compute_iou(pred, target, box_l = None, box_r = None, is_idx = False):
                 pred_i[(pred_i == hand_label) & (region_mask == False)] = 0
                 target_i[(target_i == hand_label) & (region_mask == False)] = 0
         
-    pred = pred.view(-1)
-    target = target.view(-1)
+    pred = tf.reshape(pred, [-1])
+    target = tf.reshape(target, [-1])
 
     # Ignore IoU for background class ("0")
     for cls in range(1, n_classes):#xrange(1, n_classes):
         pred_inds = pred == cls
         #print(np.unique(pred_inds.cpu().data.numpy()))
         target_inds = target == cls
-        intersection = (pred_inds[target_inds]).long().sum().data.cpu().item()  # Cast to long to prevent overflows
-        union = pred_inds.long().sum().data.cpu().item() + target_inds.long().sum().data.cpu().item() - intersection
+        intersection = tf.reduce_sum(tf.cast(pred_inds[target_inds], tf.int64))  # Cast to long to prevent overflows
+        prediction_area = tf.reduce_sum(tf.cast(pred_inds, tf.int64))
+        gt_area = tf.reduce_sum(tf.cast(target_inds, tf.int64))
+    
+        union = prediction_area + gt_area - intersection
         if union == 0:
             ious.append(1.0)  # If there is no ground truth, do not include in evaluation
         else:

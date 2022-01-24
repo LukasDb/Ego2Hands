@@ -1,4 +1,4 @@
-from utils import visualize_seg_detection
+from utils import visualize_seg_detection, compute_ap, compute_iou
 import numpy as np
 import tensorflow as tf
 from data_loaders.Ego2Hands_tf import Ego2HandsData
@@ -83,8 +83,8 @@ def test_tf(model: CSM_TF, config: Config, seq_i):
             #seg_output_final = nn.functional.interpolate(seg_output_final, size = (img_h, img_w), mode = 'bilinear', align_corners = True)
             seg_output_final = tf.image.resize(seg_output_final, size = (img_h, img_w))
 
-            #iou_np = compute_iou(seg_output_final, seg_gt_tensor)
-            #iou_meter.update(np.mean(iou_np), 1)
+            iou_np = compute_iou(seg_output_final, seg_gt_tensor)
+            iou_meter.update(np.mean(iou_np), 1)
             
             if config.energy:
                 energy_l_final = tf.image.resize(tf.expand_dims(energy_l_final, 0), size = (img_h, img_w))

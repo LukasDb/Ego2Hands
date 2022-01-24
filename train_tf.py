@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 from data_loaders.Ego2Hands_tf import Ego2HandsData
 import os
-from utils import AverageMeter
+from utils import AverageMeter, save_model
 import cv2
 from models.CSM.CSM_tf import CSM_baseline
 import cv2
@@ -74,8 +74,8 @@ def train(config, model):
 
         
     # Criterions
-    criterion_seg = tf.keras.losses.SparseCategoricalCrossentropy(from_logits = True) #  nn.CrossEntropyLoss().cuda()
-    criterion_mse = tf.keras.losses.MeanSquaredError() # nn.MSELoss().cuda()
+    criterion_seg = tf.keras.losses.SparseCategoricalCrossentropy(from_logits = True)
+    criterion_mse = tf.keras.losses.MeanSquaredError()
 
     # Measures
     iou_val_best = 0.0
@@ -95,11 +95,11 @@ def train(config, model):
         iters = 0
         max_iter = config.max_iter_seg
     
-    #optimizer_seg = torch.optim.Adam(model_seg.parameters(), lr_rate, weight_decay=config.weight_decay)
+    
     optimizer_seg = tf.keras.optimizers.Adam(learning_rate=lr_rate)
-    #lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer_seg, step_size = step_size, gamma = gamma)
+    
 
-    # model.sigmoid.build()
+
     _, _, img_tensor, _, _, _, _, _, _ = next(temp)
 
     model.build(input_shape = (config.batch_size, *img_tensor.shape))
@@ -211,24 +211,14 @@ def train(config, model):
                 
                 if model_is_best:
                     print("Saving best model at {}".format(model_save_path))
+                    save_model(model, True, False, model_save_path)
 
-
-                    # save_model({
-                            # 'iter': iters,
-                            # 'state_dict': model_seg.state_dict(),
-                    # }, is_best = True, is_last = False, filename = model_save_path)
-                
+            # after one step
             #print("Saving latest model at {}".format(model_save_path))
-            # save_model({
-                    # 'iter': iters,
-                    # 'state_dict': model_seg.state_dict(),
-            # }, is_best = False, is_last = False, filename = model_save_path)
-#             
-    # Save the last model as pretrained model
-    # save_model({
-         # 'iter': iters,
-         # 'state_dict': model_seg.state_dict(),
-    # }, is_best = False, is_last = True, filename = model_save_path)
+            #save_model(model, False, False, model_save_path)
+
+    # after training
+    save_model(model, False, True, model_save_path)
 
 
 if __name__=='__main__':

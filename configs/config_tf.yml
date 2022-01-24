@@ -1,5 +1,5 @@
 dataset: "ego2hands"
-model_name: "CSM"
+model_name: "CSM_TF"
 dataset_train_dir: "data/Ego2Hands/train"
 dataset_eval_dir: "data/Ego2Hands/eval/"
 bg_all_dir: "data/Ego2Hands/backgrounds"
@@ -9,12 +9,12 @@ custom_eval_dir: "data/Ego2Hands/custom/custom_eval"
 custom_scene_brightness: "normal" #[dark, normal, bright]
 
 workers: 4
-batch_size: 2
-num_seqs: 8
-max_iter_seg: 10
-max_iter_seg_adapt: 10
+batch_size: 4
+num_seqs: 4
+max_iter_seg: 500
+max_iter_seg_adapt: 50
 display_interval: 10
-save_interval: 10
+save_interval: 100
 num_classes : 3
 weight_decay: 0.001
 
@@ -32,4 +32,9 @@ policy_parameter_seg_adapt:
   step_size: 5000
 
 energy: false
-save_outputs: false
+save_outputs: true
+adapt: false
+input_edge: false
+model_path: "saved_models"
+dual_hands: false
+speed_test: false

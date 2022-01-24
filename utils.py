@@ -3,6 +3,7 @@ import numpy as np
 from easydict import EasyDict as edict
 import yaml
 import random
+import tensorflow as tf
 #import torch
 #import torch.nn as nn
 
@@ -25,14 +26,14 @@ class AverageMeter:
         self.count += n
         self.avg = self.sum / self.count
         
-def save_model(state, is_best, is_last, filename):
+def save_model(model: tf.keras.Model, is_best, is_last, filename):
     if is_last:
-        torch.save(state, filename + '_pretrained.pth.tar')
+        model.save(filename + '_pretrained.pth.tar')
     else:
         if is_best:
-            torch.save(state, filename + '_best.pth.tar')
+            model.save(filename + '_best.pth.tar')
         else:
-            torch.save(state, filename + '_latest.pth.tar')
+            model.save(filename + '_latest.pth.tar')
 
 def Config(filename):
     with open(filename, 'r') as f:
@@ -56,10 +57,13 @@ def compute_iou(pred, target, box_l = None, box_r = None, is_idx = False):
              return np.array([0.0])
     ious = []
     if not pred.shape[2] == target.shape[1]:
-        pred = nn.functional.interpolate(pred, size = (target.shape[1], target.shape[2]), mode = 'bilinear', align_corners = True)
+        #pred = nn.functional.interpolate(pred, size = (target.shape[1], target.shape[2]), mode = 'bilinear', align_corners = True)
+        pred = tf.image.resize(pred, size = (target.shape[1], target.shape[2]))
         
     if not is_idx:
-        pred = torch.argmax(pred, dim=1)
+        #pred = torch.argmax(pred, dim=1)
+        pred = tf.argmax(pred, -1)
+
     
     # If region of interest is provided, clear values outside of it
     if box_l is not None and box_r is not None:
@@ -67,7 +71,7 @@ def compute_iou(pred, target, box_l = None, box_r = None, is_idx = False):
         for pred_i, target_i, box_l_i, box_r_i in zip(pred, target, box_l, box_r):
             for hand_label, box_j in enumerate([box_l_i, box_r_i]):
                 hand_label = hand_label + 1
-                region_mask = torch.zeros_like(pred_i, dtype=torch.bool)
+                region_mask = tf.zeros_like(pred_i, dtype=tf.bool)
                 region_mask[box_j[0]:box_j[1], box_j[2]:box_j[3]] = True
                 pred_i[(pred_i == hand_label) & (region_mask == False)] = 0
                 target_i[(target_i == hand_label) & (region_mask == False)] = 0

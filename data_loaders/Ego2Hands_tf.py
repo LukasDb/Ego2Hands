@@ -173,8 +173,7 @@ def get_random_brightness_for_scene(bg_adapt, seq_i):
             return random.randint(*brightness_map["bright"])
 
 
-LEFT_IDX = 1
-RIGHT_IDX = 2
+
 
 class Ego2HandsData():
     
@@ -183,10 +182,18 @@ class Ego2HandsData():
         #self.args = args
         self.config = config
         self.mode = mode
-        self.bg_adapt = False
+        self.bg_adapt = config.adapt
         self.seq_i = seq_i
-        self.input_edge = False
+        self.input_edge = config.input_edge
         self.bg_list = read_bg_data(self.config)
+
+        if config.dual_hands:
+            self.LEFT_IDX = 1
+            self.RIGHT_IDX = 2
+        else:
+            self.LEFT_IDX = 1
+            self.RIGHT_IDX = 1
+
         if self.mode == "train_seg":
             self.img_path_list, self.energy_path_list = read_ego2hands_files(self.config.dataset_train_dir)
         elif self.mode == "test_seg":
@@ -273,10 +280,10 @@ class Ego2HandsData():
                 img_real, bg_img_resized = merge_hands(left_img, right_img, bg_img, self.bg_adapt)
                 img_real_orig, _ = merge_hands(left_img_orig, right_img_orig, bg_img_resized, self.bg_adapt, False)
                 seg_real = np.zeros((img_real.shape[:2]), dtype=np.uint8)
-                seg_real[right_seg] = RIGHT_IDX
-                seg_real[left_seg] = LEFT_IDX
+                seg_real[right_seg] = self.RIGHT_IDX
+                seg_real[left_seg] = self.LEFT_IDX
                 # Check for hand with insufficient size
-                right_mask = seg_real == RIGHT_IDX
+                right_mask = seg_real == self.RIGHT_IDX
                 if right_mask.sum() < self.valid_hand_seg_th:
                     seg_real[right_mask] = 0
                     right_energy.fill(0.0)
@@ -285,10 +292,10 @@ class Ego2HandsData():
                 img_real, bg_img_resized = merge_hands(right_img, left_img, bg_img, self.bg_adapt)
                 img_real_orig, _ = merge_hands(right_img_orig, left_img_orig, bg_img_resized, self.bg_adapt, False)
                 seg_real = np.zeros((img_real.shape[:2]), dtype=np.uint8)
-                seg_real[left_seg] = LEFT_IDX
-                seg_real[right_seg] = RIGHT_IDX
+                seg_real[left_seg] = self.LEFT_IDX
+                seg_real[right_seg] = self.RIGHT_IDX
                 # Check for hand with insufficient size
-                left_mask = seg_real == LEFT_IDX
+                left_mask = seg_real == self.LEFT_IDX
                 if left_mask.sum() < self.valid_hand_seg_th:
                     seg_real[left_mask] = 0
                     left_energy.fill(0.0)
@@ -297,14 +304,14 @@ class Ego2HandsData():
                 img_real, bg_img_resized = merge_hands(right_img, None, bg_img, self.bg_adapt)
                 img_real_orig, _ = merge_hands(right_img_orig, None, bg_img_resized, self.bg_adapt, False)
                 seg_real = np.zeros((img_real.shape[:2]), dtype=np.uint8)
-                seg_real[right_seg] = RIGHT_IDX
+                seg_real[right_seg] = self.RIGHT_IDX
                 left_energy.fill(0.0)
             elif merge_mode == 9:
                 # drop right ahnd, left hand only
                 img_real, bg_img_resized = merge_hands(left_img, None, bg_img, self.bg_adapt)
                 img_real_orig, _ = merge_hands(left_img_orig, None, bg_img_resized, self.bg_adapt, False)
                 seg_real = np.zeros((img_real.shape[:2]), dtype=np.uint8)
-                seg_real[left_seg] = LEFT_IDX
+                seg_real[left_seg] = self.LEFT_IDX
                 right_energy.fill(0.0)
 
 
@@ -375,12 +382,12 @@ class Ego2HandsData():
             box_r_np = get_bounding_box_from_energy(energy_r_gt, close_op = False)
 
             img_real_orig_tensor = tf.convert_to_tensor(img_real_orig)
-            img_real_test_tensor = normalize_tensor(tf.convert_to_tensor(img_real_test), 128.0, 256.0)
+            img_real_test_tensor = (tf.convert_to_tensor(img_real_test) - 128.0) / 256.0
             seg_gt_tensor = tf.convert_to_tensor(seg_gt_test)
             box_l_tensor = tf.convert_to_tensor(box_l_np)
             box_r_tensor = tf.convert_to_tensor(box_r_np)
             
-            return img_real_orig_tensor, img_real_test_tensor, seg_gt_tensor, box_l_tensor, box_r_tensor
+            return img_real_orig_tensor, img_real_test_tensor, seg_gt_tensor
 
     def __len__(self):
         return len(self.img_path_list)

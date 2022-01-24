@@ -16,7 +16,7 @@ def main():
 
     from train_tf import train
 
-    model = CSM.CSM_baseline(n_classes = config.num_classes, with_energy = config.energy, input_edge = False)
+    model = CSM.CSM_baseline(n_classes = config.num_classes, with_energy = config.energy, input_edge = config.input_edge)
 
     #model.build(input_shape = (config.batch_size, 288, 512, 3))
 
@@ -48,13 +48,6 @@ def visualize(i, seq_i, img_orig_tensor, img_test_tensor, seg_output_final, box_
     img_orig_np = img_orig_tensor.numpy()
     img_test_np = img_test_tensor.numpy().transpose(1,2,0) # channels last
     seg_output_np = seg_output_final.numpy()
-
-    if box_l_gt_tensor is not None:
-        box_l_gt_np = box_l_gt_tensor.numpy()
-    if box_r_gt_tensor is not None:
-        box_r_gt_np = box_r_gt_tensor.numpy()
-    
-    custom_status = seq_i
 
     close_kernel_size = 7
 

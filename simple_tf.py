@@ -4,96 +4,73 @@ from data_loaders.Ego2Hands_tf import Ego2HandsData
 import os
 from utils import Config
 import matplotlib.pyplot as plt
+import numpy as np
+from datetime import datetime
+from preprocess_dataset import get_preprocessed_datasets
 
 
 # ------------------------- DATASET AND CONSTANTS -------------------------------------
 
 config_path = os.path.join("configs", "config_tf.yml")
 config = Config(config_path)
-hand_dataset_train = lambda : Ego2HandsData(config, mode = "train_seg")
-hand_dataset_test = lambda : Ego2HandsData(config, mode = "test_seg", seq_i = 1)
+
 
 #elf.img_h, self.img_w = 
-temp = hand_dataset_train()
-temp_test = hand_dataset_test()
-h, w = (temp.img_h, temp.img_w) # 288, 512
 
-
-TRAIN_LENGTH = temp.__len__()
-BATCH_SIZE = 64
+PRED_BATCH_INTERVAL = 10
+TRAIN_LENGTH = 1000
+BATCH_SIZE = config.batch_size
 BUFFER_SIZE = 1000
 STEPS_PER_EPOCH = TRAIN_LENGTH // BATCH_SIZE
-OUTPUT_CLASSES = 3
+OUTPUT_CLASSES = 1
 
 INPUT_SHAPE = [128, 128, 3]
 
-EPOCHS = 20
+EPOCHS = config.max_iter_seg
 VAL_SUBSPLITS = 5
-VALIDATION_STEPS = temp_test.__len__()//BATCH_SIZE//VAL_SUBSPLITS
+VALIDATION_STEPS =TRAIN_LENGTH//BATCH_SIZE//VAL_SUBSPLITS
+
+x_train, y_train, x_eval, y_eval = get_preprocessed_datasets(config, TRAIN_LENGTH)
+
+normalize = lambda x: tf.cast(x, tf.float32)/255.0
+to_tensor = lambda x: tf.constant(x)
+x_train = [normalize(x) for x in x_train]
+x_eval = [normalize(x) for x in x_eval]
+y_train = [tf.convert_to_tensor(x) for x in y_train]
+y_eval = [tf.convert_to_tensor(x) for x in y_eval]
+
+# convert list of tensors to [n, *[0].shape] tensor
+x_train = tf.stack(x_train)
+y_train = tf.stack(y_train)
+x_eval = tf.stack(x_eval)
+y_eval = tf.stack(y_eval)
 
 
 
-def get_datapoint(*args):
-    img = tf.cast(args[1], tf.float32) / 255.0 # normalize
-    img = tf.image.resize(img, INPUT_SHAPE[:2])
-    mask = args[3]
-    mask = tf.image.resize(tf.expand_dims(mask, 2), INPUT_SHAPE[:2], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-    return (img, tf.squeeze(mask))
-
-def get_datapoint_test(*args):
-    img = tf.cast(args[0], tf.float32) / 255.0 # normalize
-    img = tf.image.resize(img, INPUT_SHAPE[:2])
-    mask = args[2]
-    mask = tf.image.resize(tf.expand_dims(mask, 2), INPUT_SHAPE[:2], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-    return (img, tf.squeeze(mask))
-
-output_signature = (
-    tf.TensorSpec(shape=(1,), dtype=tf.int32),
-    tf.TensorSpec(shape=(h, w, 3), dtype=tf.float32),
-    tf.TensorSpec(shape=(h, w, 2 if config.energy else 1), dtype=tf.float32),
-    tf.TensorSpec(shape=(h, w), dtype=tf.uint8),
-    tf.TensorSpec(shape=(h//2, w//2), dtype=tf.uint8),
-    tf.TensorSpec(shape=(h//4, w//4), dtype=tf.uint8),
-    tf.TensorSpec(shape=(h, w, 3), dtype=tf.float32),
-    tf.TensorSpec(shape=(h//2, w//2, 3), dtype=tf.float32),
-    tf.TensorSpec(shape=(h//4, w//4, 3), dtype=tf.float32),
-)
-output_signature_test = (
-    tf.TensorSpec(shape=(h, w, 3), dtype=tf.float32),
-    tf.TensorSpec(shape=(h, w, 2 if config.energy else 1), dtype=tf.float32),
-    tf.TensorSpec(shape=(h, w), dtype=tf.uint8),
-)
-
-
-
-train_loader = tf.data.Dataset.from_generator(hand_dataset_train, output_signature=output_signature) \
-    .map(get_datapoint, num_parallel_calls=tf.data.AUTOTUNE) \
-    .cache().batch(config.batch_size).shuffle(20).prefetch(tf.data.AUTOTUNE)
-
-test_loader = tf.data.Dataset.from_generator(hand_dataset_test, output_signature=output_signature_test) \
-     .map(get_datapoint_test, num_parallel_calls=tf.data.AUTOTUNE) \
-    .cache().batch(1).prefetch(tf.data.AUTOTUNE)
-
+print("Loaded training set: ", len(x_train))
 
 
 def display(display_list, block = False):
     title = ['Input Image', 'True Mask', 'Predicted Mask']
     for i in range(len(display_list)):
-        cv2.imshow(title[i], display_list[i].numpy())
-    cv2.waitKey(0 if block else 1)
+        #cv2.imshow(title[i], display_list[i].numpy())
+        cv2.imwrite(f"output_{i}.png", display_list[i].numpy())
+    #if block:
+    #    cv2.waitKey(0)
+    #else:
+    #    cv2.waitKey(1)
 
-for sample_image_batch, sample_mask_batch in train_loader.take(2):
-    sample_image, sample_mask = sample_image_batch[0], sample_mask_batch[0]
-    display([tf.cast(sample_image*255, tf.uint8), sample_mask*50], block=False)
 
-
-print("Press space to continue...")
-for sample_image_batch, sample_mask_batch in test_loader.take(2):
-    sample_image, sample_mask = tf.cast(sample_image_batch[0]*255, tf.uint8), sample_mask_batch[0]*50
-    display([sample_image, sample_mask], block=True)
-
-print("Fitting....")
-
+# for sample_image_batch, sample_mask_batch in train_loader.take(2):
+    # sample_image, sample_mask = sample_image_batch[0], sample_mask_batch[0]
+    # display([tf.cast(sample_image*255, tf.uint8), sample_mask*50], block=False)
+# 
+# 
+# print("Press space to continue...")
+# for sample_image, sample_mask in zip(x_train[:2], y_train[:2]):
+    # sample_image = tf.cast(sample_image*255, tf.uint8)
+    # sample_mask *= 50
+    # display([sample_image, sample_mask], block=True)
 
 # ---------------------------------------- MODEL DEFINITION -------------------------------------------------
 def upsample(filters, size, apply_dropout=False):
@@ -163,57 +140,79 @@ up_stack = [
 ]
 
 model = unet_model(output_channels=OUTPUT_CLASSES)
-
+# loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+loss = tf.keras.losses.BinaryCrossentropy(from_logits=False)
 model.compile(optimizer='adam',
-            loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            loss=loss,
             metrics=['accuracy'])
 
 
-
-def create_mask(pred_mask):
+def create_mask_indices(pred_mask):
     pred_mask = tf.argmax(pred_mask, axis=-1)
     pred_mask = pred_mask[..., tf.newaxis]
     return pred_mask[0]
 
-def show_predictions(dataset=None, num=1):
+def create_mask(pred_mask):
+    pred_mask[pred_mask>=0.5] = 1
+    pred_mask[pred_mask<0.5] = 0
+    return tf.squeeze(pred_mask)
+
+def show_predictions(dataset=None, num=1, block=False):
     if dataset:
-        for image, mask in dataset.take(num):
+        for image, mask in dataset:
             pred_mask = model.predict(image)
             pred_mask = tf.cast(create_mask(pred_mask), tf.uint8) * 50
-            display([tf.cast(image[0]*255, tf.uint8), mask[0]*50, pred_mask])
+            display([tf.cast(image[0]*255, tf.uint8), mask[0]*50, pred_mask], block=block)
     else:
         prediction = model.predict(sample_image[tf.newaxis, ...])
         predicted_mask = tf.cast(create_mask(prediction), tf.uint8) * 50
-        display([sample_image, sample_mask, predicted_mask])
+        display([sample_image, sample_mask, predicted_mask], block=block)
                     
+#show_predictions(block=True)
 
-show_predictions()
+logdir = "logs/train_data/" + datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
 class DisplayCallback(tf.keras.callbacks.Callback):
-  def on_epoch_end(self, epoch, logs=None):
-    show_predictions()
-    print ('\nSample Prediction after epoch {}\n'.format(epoch+1))
+    def on_epoch_end(self, epoch, logs=None):
+        show_predictions(num = 3)
+
+class TensorBoardImageCallback(tf.keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        imgs = []
+        gts = []
+        preds = []
+
+        num = 3
+
+        imgs = x_eval[:num]
+        gts = y_eval[:num]
+        gts = tf.expand_dims(gts, -1)
+        preds = model.predict(imgs)
+        preds = tf.cast(create_mask(preds), tf.uint8) * 50
+        preds = tf.expand_dims(preds, -1)
+        imgs = tf.cast(imgs*255.0, tf.uint8)
+        gts = tf.cast(gts*50, tf.uint8)
+
+        file_writer = tf.summary.create_file_writer(logdir)
+        with file_writer.as_default():
+            tf.summary.image("imgs", imgs, max_outputs = num, step=epoch)
+            tf.summary.image("gts", gts, max_outputs = num, step=epoch)
+            tf.summary.image("preds", preds,max_outputs = num, step=epoch)
 
 
-model_history = model.fit(train_loader, epochs=EPOCHS,
-                          steps_per_epoch=STEPS_PER_EPOCH,
-                          validation_steps=VALIDATION_STEPS,
-                          validation_data=test_loader,
-                          callbacks=[DisplayCallback()])
-
-loss = model_history.history['loss']
-val_loss = model_history.history['val_loss']
-
-plt.figure()
-plt.plot(model_history.epoch, loss, 'r', label='Training loss')
-plt.plot(model_history.epoch, val_loss, 'bo', label='Validation loss')
-plt.title('Training and Validation Loss')
-plt.xlabel('Epoch')
-plt.ylabel('Loss Value')
-plt.ylim([0, 1])
-plt.legend()
-plt.show()
 
 
-show_predictions(test_loader, 10)
+model_history = model.fit(x_train, y_train,
+                          epochs=EPOCHS,
+                          batch_size = config.batch_size,
+                          validation_data=(x_eval, y_eval),
+                          callbacks=[tf.keras.callbacks.ModelCheckpoint(
+                                                'simple_tf/model_checkpoint/', monitor='val_loss', verbose=0, 
+                                                save_best_only=True,save_weights_only=True, mode='min'), 
+                                    tf.keras.callbacks.TensorBoard(log_dir=logdir),
+                                    #DisplayCallback(),
+                                    TensorBoardImageCallback()
+                          ])
+
+model.save('simple_tf/last/')

@@ -8,11 +8,14 @@ custom_bg_dir: "data/Ego2Hands/custom/custom_train"
 custom_eval_dir: "data/Ego2Hands/custom/custom_eval"
 custom_scene_brightness: "normal" #[dark, normal, bright]
 
+dataset_train_preprocessed: "data/preprocessed/train"
+dataset_eval_preprocessed: "data/preprocessed/eval"
+
 workers: 4
-batch_size: 4
+batch_size: 64
 num_seqs: 4
 max_iter_seg: 50
-max_iter_seg_adapt: 50
+max_iter_seg_adapt: 10
 display_interval: 10
 save_interval: 10
 num_classes : 3

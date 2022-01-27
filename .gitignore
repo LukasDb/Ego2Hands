@@ -4,3 +4,5 @@
 **/models_saved/**
 *.pyc
 **/saved_models/**
+**/logs/**
+**/simple_tf/**

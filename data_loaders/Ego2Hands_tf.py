@@ -375,17 +375,20 @@ class Ego2HandsData():
             seg_gt_test = (cv2.imread(self.seg_gt_path_list[index], 0)/50).astype(np.uint8)
             seg_gt_test = cv2.resize(seg_gt_test, (self.img_w, self.img_h), interpolation=cv2.INTER_NEAREST)
 
+            if self.LEFT_IDX == self.RIGHT_IDX: # == dual hands = False
+                seg_gt_test[seg_gt_test>0.1] = 1
+
             # Prepare bounding box gt
-            energy_l_gt = cv2.resize(cv2.imread(self.energy_l_gt_path_list[index]), (self.img_w, self.img_h)).astype(np.float32)/255.0
-            box_l_np = get_bounding_box_from_energy(energy_l_gt, close_op = False)
-            energy_r_gt = cv2.resize(cv2.imread(self.energy_r_gt_path_list[index]), (self.img_w, self.img_h)).astype(np.float32)/255.0
-            box_r_np = get_bounding_box_from_energy(energy_r_gt, close_op = False)
+            #energy_l_gt = cv2.resize(cv2.imread(self.energy_l_gt_path_list[index]), (self.img_w, self.img_h)).astype(np.float32)/255.0
+            #box_l_np = get_bounding_box_from_energy(energy_l_gt, close_op = False)
+            #energy_r_gt = cv2.resize(cv2.imread(self.energy_r_gt_path_list[index]), (self.img_w, self.img_h)).astype(np.float32)/255.0
+            #box_r_np = get_bounding_box_from_energy(energy_r_gt, close_op = False)
 
             img_real_orig_tensor = tf.convert_to_tensor(img_real_orig)
             img_real_test_tensor = (tf.convert_to_tensor(img_real_test) - 128.0) / 256.0
             seg_gt_tensor = tf.convert_to_tensor(seg_gt_test)
-            box_l_tensor = tf.convert_to_tensor(box_l_np)
-            box_r_tensor = tf.convert_to_tensor(box_r_np)
+            #box_l_tensor = tf.convert_to_tensor(box_l_np)
+            #box_r_tensor = tf.convert_to_tensor(box_r_np)
             
             return img_real_orig_tensor, img_real_test_tensor, seg_gt_tensor
 

@@ -8,13 +8,10 @@ custom_bg_dir: "data/Ego2Hands/custom/custom_train"
 custom_eval_dir: "data/Ego2Hands/custom/custom_eval"
 custom_scene_brightness: "normal" #[dark, normal, bright]
 
-dataset_train_preprocessed: "data/preprocessed/train"
-dataset_eval_preprocessed: "data/preprocessed/eval"
-
 workers: 4
 batch_size: 64
 num_seqs: 4
-max_iter_seg: 50
+max_iter_seg: 200
 max_iter_seg_adapt: 10
 display_interval: 10
 save_interval: 10
@@ -41,3 +38,6 @@ input_edge: false
 model_path: "saved_models"
 dual_hands: false
 speed_test: false
+input_shape: [224, 224, 3]
+dataset_train_preprocessed: "data/preprocessed_224/train"
+dataset_eval_preprocessed: "data/preprocessed_224/eval"

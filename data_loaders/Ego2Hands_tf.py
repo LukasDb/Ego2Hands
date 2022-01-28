@@ -355,7 +355,7 @@ class Ego2HandsData():
             energy_gt2_tensor = tf.convert_to_tensor(energy_gt2)
             energy_gt4_tensor = tf.convert_to_tensor(energy_gt4)
 
-            return img_id, img_real_orig_tensor, img_real_tensor, seg_real_tensor, seg_real2_tensor, seg_real4_tensor, energy_gt_tensor, energy_gt2_tensor, energy_gt4_tensor
+            return (img_id, img_real_orig_tensor, img_real_tensor, seg_real_tensor, seg_real2_tensor, seg_real4_tensor, energy_gt_tensor, energy_gt2_tensor, energy_gt4_tensor)
             
         elif self.mode == "test_seg":
             # Prepare image
@@ -390,7 +390,7 @@ class Ego2HandsData():
             #box_l_tensor = tf.convert_to_tensor(box_l_np)
             #box_r_tensor = tf.convert_to_tensor(box_r_np)
             
-            return img_real_orig_tensor, img_real_test_tensor, seg_gt_tensor
+            return (img_real_orig_tensor, img_real_test_tensor, seg_gt_tensor)
 
     def __len__(self):
         return len(self.img_path_list)

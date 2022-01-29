@@ -19,14 +19,32 @@ def get_preprocessed_datasets(config, num):
     for idx in tqdm(range(num)):
         filename_img = os.path.join(config.dataset_train_preprocessed, "img", f"img_{idx:05}.png")
         filename_mask = os.path.join(config.dataset_train_preprocessed, "label", f"mask_{idx:05}.png")
-        x_train.append(cv2.imread(filename_img))
+
+        if config.input_edge:
+            filename_edge = os.path.join(config.dataset_train_preprocessed, "edge", f"edge_{idx:05}.png")
+            edge = cv2.imread(filename_edge, cv2.IMREAD_GRAYSCALE)
+            img = cv2.imread(filename_img, cv2.IMREAD_GRAYSCALE)
+            img = np.stack([edge, img], axis=2)
+        else:
+            img = cv2.imread(filename_img)
+
+        x_train.append(img)
         y_train.append(cv2.imread(filename_mask, cv2.IMREAD_GRAYSCALE))
 
     print("Loading evaluation images...")
     for idx in tqdm(range(2000)):
         filename_img = os.path.join(config.dataset_eval_preprocessed, "img", f"img_{idx:05}.png")
         filename_mask = os.path.join(config.dataset_eval_preprocessed, "label", f"mask_{idx:05}.png")
-        x_eval.append(cv2.imread(filename_img))
+        
+        if config.input_edge:
+            filename_edge = os.path.join(config.dataset_eval_preprocessed, "edge", f"edge_{idx:05}.png")
+            edge = cv2.imread(filename_edge, cv2.IMREAD_GRAYSCALE)
+            img = cv2.imread(filename_img, cv2.IMREAD_GRAYSCALE)
+            img = np.stack([edge, img], axis=2)
+        else:
+            img = cv2.imread(filename_img)
+
+        x_eval.append(img)
         y_eval.append(cv2.imread(filename_mask, cv2.IMREAD_GRAYSCALE))
     
     return x_train, y_train, x_eval, y_eval
@@ -35,12 +53,14 @@ def get_preprocessed_datasets(config, num):
 # ------------------------- DATASET AND CONSTANTS -------------------------------------
 
 def main():
-    CONTINUE_AT_IDX = 30000
-    UNTIL_IDX = 3000000000
-    PREPROCESS_EVAL = False
-
     config_path = os.path.join("configs", "config_tf.yml")
     config = Config(config_path)
+
+    CONTINUE_AT_IDX = 0
+    UNTIL_IDX = 2000000
+    PREPROCESS_EVAL = True
+    SAVE_TRAIN = True
+    SAVE_EDGE = config.input_edge
     INPUT_SHAPE = config.input_shape
 
     train_loader = Ego2HandsData(config, mode = "train_seg")
@@ -49,8 +69,11 @@ def main():
 
     ensure_dir(os.path.join(config.dataset_train_preprocessed, "img"))
     ensure_dir(os.path.join(config.dataset_train_preprocessed, "label"))
+    ensure_dir(os.path.join(config.dataset_train_preprocessed, "edge"))
     ensure_dir(os.path.join(config.dataset_eval_preprocessed, "img"))
     ensure_dir(os.path.join(config.dataset_eval_preprocessed, "label"))
+    ensure_dir(os.path.join(config.dataset_eval_preprocessed, "edge"))
+
 
 
     print("Preprocessing training set...")
@@ -58,11 +81,20 @@ def main():
     #for idx, (img, mask) in enumerate(train_loader.skip(CONTINUE_AT_IDX).take(UNTIL_IDX)):
 
     print(train_loader)
+    img = None
+    mask = None
+    edge = None
     for idx in range(CONTINUE_AT_IDX, UNTIL_IDX):
         args = train_loader[idx]
-        img, mask = get_datapoint_train(args, config)
+        img_, mask_ = (x.numpy() for x in get_datapoint_train(args, config))
+        if SAVE_EDGE:
+            img_ = cv2.cvtColor(img_, cv2.COLOR_BGR2GRAY)
+            edge = get_edge(img_.astype(np.uint8))
+        if SAVE_TRAIN:
+            img = img_
+            mask = mask_
         pbar.update(1)
-        save_datapoint(config.dataset_train_preprocessed, idx, img.numpy(), mask.numpy())
+        save_datapoint(config.dataset_train_preprocessed, idx, img, mask, edge)
     pbar.close()
 
     if PREPROCESS_EVAL:        
@@ -72,22 +104,37 @@ def main():
             test_loader =  Ego2HandsData(config, mode = "test_seg", seq_i = seq_i) # TODO expand to more sequences
             pbar = tqdm(total=test_loader.__len__())
             for args in test_loader:
-                img, mask = get_datapoint_test(args, config)
-                save_datapoint(config.dataset_eval_preprocessed, idx, img.numpy(), mask.numpy())
+                img, mask = (x.numpy() for x in get_datapoint_test(args, config))
+                if SAVE_EDGE:
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    edge = get_edge(img.astype(np.uint8))
+                save_datapoint(config.dataset_eval_preprocessed, idx, img, mask, edge)
                 pbar.update(1)
                 idx += 1
             pbar.close()
-    
     print("Done")
 
 
+def get_edge(img):
+    edge = cv2.Canny(img, 50, 180)
+    kernel = np.ones((3,3), np.uint8)
+    edge = cv2.dilate(edge, kernel, iterations=1)
+    edge = cv2.erode(edge, kernel, iterations=1)
+    return edge
 
 
-def save_datapoint(path, idx, img, mask):
-    filename_img = os.path.join(path, "img", f"img_{idx:05}.png")
-    filename_mask = os.path.join(path, "label", f"mask_{idx:05}.png")
-    cv2.imwrite(filename_img, img)
-    cv2.imwrite(filename_mask, mask)
+
+def save_datapoint(path, idx, img=None, mask=None, edge = None):
+    if img is not None:
+        filename_img = os.path.join(path, "img", f"img_{idx:05}.png")
+        cv2.imwrite(filename_img, img)
+    if mask is not None:
+        filename_mask = os.path.join(path, "label", f"mask_{idx:05}.png")
+        cv2.imwrite(filename_mask, mask)
+    if edge is not None:
+        filename_edge = os.path.join(path, "edge", f"edge_{idx:05}.png")
+        cv2.imwrite(filename_edge, edge)
+
 
 
 
